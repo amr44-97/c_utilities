@@ -43,6 +43,7 @@ typedef enum TokenKind : uint32_t {
     Tok_equal,
     Tok_equal_equal,
     Tok_semicolon,
+    Tok_comma,
     Tok_bang,
     Tok_bang_equal,
     Tok_questionmark,
@@ -191,6 +192,7 @@ typedef enum LexingState{
     Lexing_identifier,
     Lexing_number_literal,
     Lexing_string_literal,
+    Lexing_char_literal,
     Lexing_equal,
     Lexing_plus,
     Lexing_minus,
@@ -204,6 +206,7 @@ typedef enum LexingState{
     Lexing_angle_bracket_left,
     Lexing_angle_bracket_right,
     Lexing_pipe,
+    Lexing_bang,
     Lexing_period,
     Lexing_single_line_comment,
     Lexing_builtin,
@@ -246,6 +249,7 @@ const char* lexer_get_line(Lexer* lexer, Token* token);
 const char* token_get_line(const char* source, Token* token);
 
 
+#define IMPEL_C_LEXER
 #ifdef IMPEL_C_LEXER
 
 Lexer lexer_init_s(const char* source, uint32_t src_len){
@@ -291,6 +295,7 @@ loop: switch(state){
                 
                  case '#':
                      lex->index += 1;
+                     result.kind = Tok_hash;
                      result.loc.offset = lex->index;
                      state = Lexing_builtin;
                      goto loop;
@@ -302,6 +307,12 @@ loop: switch(state){
                      state = Lexing_identifier;
                      goto loop;
  
+                 case '\'':
+                     lex->index += 1;
+                     result.kind = Tok_char_literal;
+                     state = Lexing_char_literal;
+                     goto loop;
+
                  case '"':
                      lex->index += 1;
                      result.kind = Tok_string_literal;
@@ -398,8 +409,19 @@ loop: switch(state){
                      lex->index += 1;
                      goto loop;
 
+                case '!':
+                     result.kind = Tok_bang;
+                     state = Lexing_bang;
+                     lex->index += 1;
+                     goto loop;
+
                 case ';':
                      result.kind = Tok_semicolon;
+                     lex->index += 1;
+                     goto end;
+
+                case ',':
+                     result.kind = Tok_comma;
                      lex->index += 1;
                      goto end;
 
@@ -462,7 +484,7 @@ loop: switch(state){
                      lex->index += 1;
                      goto loop;
                  default:
-                     for(int i = 0; i < KEYWORDS_TABLE_LEN - 1; i++ ){
+                     for(int i = 0; i < KEYWORDS_TABLE_LEN ; i++ ){
                          if(!memcmp(&lex->source[result.loc.offset], KeywordsTable[i].name , lex->index - result.loc.offset)){
                              result.kind = KeywordsTable[i].kind;
                          }
@@ -472,6 +494,9 @@ loop: switch(state){
          }break;
         case Lexing_string_literal:{
              switch (lex->source[lex->index]) {
+                case '\\':
+                     lex->index += 2;
+                     goto loop;
                  case '"':
                      lex->index += 1;
                      goto end;
@@ -487,6 +512,21 @@ loop: switch(state){
                      goto loop;
              }
         }break;
+
+        case Lexing_char_literal:{
+             switch (lex->source[lex->index]) {
+                 case '\'':
+                     lex->index += 1;
+                     goto end;
+                case '\\':
+                     lex->index += 2;
+                     goto loop;
+                 default:
+                     lex->index += 1;
+                     goto loop;
+             }
+        }break;
+
         case Lexing_number_literal:{
              switch (lex->source[lex->index]) {
                  case '0' ... '9':
@@ -627,6 +667,18 @@ loop: switch(state){
              }
         }break;
 
+        case Lexing_bang:{
+             switch (lex->source[lex->index]) {
+                 case '=':
+                     lex->index += 1;
+                     result.kind = Tok_bang_equal;
+                     goto end;
+
+                 default:
+                     goto end;
+             }
+        }break;
+
         case Lexing_percent:{
              switch (lex->source[lex->index]) {
                  case '=':
@@ -673,7 +725,6 @@ loop: switch(state){
                      if(lex->source[lex->index] == '='){
                         result.kind = Tok_angle_bracket_right_right_equal;
                         lex->index += 1;
-
                      }
                      goto end;
 
@@ -741,7 +792,7 @@ loop: switch(state){
                      lex->index += 1;
                      goto loop;
                  default:
-                     for(int i = 0; i < BUILTINS_TABLE_LEN - 1; i++ ){
+                     for(int i = 0; i < BUILTINS_TABLE_LEN ; i++ ){
                          if(!memcmp(&lex->source[result.loc.offset], BuiltinsTable[i].name , lex->index - result.loc.offset)){
                              result.kind = BuiltinsTable[i].kind;
                          }
@@ -780,6 +831,7 @@ const char* token_enum_to_str(TokenKind kind){
         case Tok_equal: return "equal";
         case Tok_equal_equal: return "equal_equal";
         case Tok_semicolon: return "semicolon";
+        case Tok_comma: return "comma";
         case Tok_bang: return "bang";
         case Tok_bang_equal: return "bang_equal";
         case Tok_questionmark: return "questionmark";
@@ -922,4 +974,34 @@ const char* token_buf_noalloc(const char* source,Token* tok){
 }
 
 
+#endif
+
+#if 0
+int main(int argc, char** argv) {
+    if(argc < 2) {
+        fprintf(stderr,"usage: %s <FILE_NAME>\n",argv[0]);
+        exit(1);
+    }
+    
+    switch (setjmp(lex_err)) {
+        case Error_unhandled_char:
+            goto end;
+            break;
+        case Error_string_literal_no_end_quote:
+            goto end;
+            break;
+    }
+
+   CFile file = cfile_init_alloc(argv[1]);
+    printf("%s\n",file.buffer);
+   Lexer lex =  lexer_init(file.buffer);
+    
+   while(true){
+        Token tok =  lexer_next_token(&lex);
+        printf("%s => %s\n",token_enum_to_str(tok.kind),token_buf_noalloc(lex.source, &tok));
+        if(tok.kind == Tok_eof) break;
+   }
+end:
+   cfile_deinit(&file);
+}
 #endif
