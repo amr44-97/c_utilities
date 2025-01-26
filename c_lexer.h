@@ -1,3 +1,6 @@
+// you need to define IMPEL_C_LEXER before including this header
+
+
 #ifndef C_LEXER_H
 #define C_LEXER_H
 #include <assert.h>
@@ -249,7 +252,6 @@ const char* lexer_get_line(Lexer* lexer, Token* token);
 const char* token_get_line(const char* source, Token* token);
 
 
-#define IMPEL_C_LEXER
 #ifdef IMPEL_C_LEXER
 
 Lexer lexer_init_s(const char* source, uint32_t src_len){
@@ -974,34 +976,4 @@ const char* token_buf_noalloc(const char* source,Token* tok){
 }
 
 
-#endif
-
-#if 0
-int main(int argc, char** argv) {
-    if(argc < 2) {
-        fprintf(stderr,"usage: %s <FILE_NAME>\n",argv[0]);
-        exit(1);
-    }
-    
-    switch (setjmp(lex_err)) {
-        case Error_unhandled_char:
-            goto end;
-            break;
-        case Error_string_literal_no_end_quote:
-            goto end;
-            break;
-    }
-
-   CFile file = cfile_init_alloc(argv[1]);
-    printf("%s\n",file.buffer);
-   Lexer lex =  lexer_init(file.buffer);
-    
-   while(true){
-        Token tok =  lexer_next_token(&lex);
-        printf("%s => %s\n",token_enum_to_str(tok.kind),token_buf_noalloc(lex.source, &tok));
-        if(tok.kind == Tok_eof) break;
-   }
-end:
-   cfile_deinit(&file);
-}
 #endif
